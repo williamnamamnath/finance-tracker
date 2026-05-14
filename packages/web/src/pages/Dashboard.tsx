@@ -18,7 +18,6 @@ export default function Dashboard() {
     api.get("/api/transactions", { headers: { Authorization: `Bearer ${token}` } }).then(r => setTransactions(r.data.transactions));
   }, []);
 
-  // build last 7 days chart data
   const days = Array.from({length:7}).map((_,i)=>{
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
@@ -41,7 +40,6 @@ export default function Dashboard() {
     if (!token) return;
     const res = await api.post("/api/transactions", { name, category, amount: Number(amount), type, description }, { headers: { Authorization: `Bearer ${token}` } });
     setTransactions(prev => [res.data.transaction, ...prev]);
-    // refresh summary
     const s = await api.get("/api/summary", { headers: { Authorization: `Bearer ${token}` } });
     setSummary(s.data);
     setName(""); setAmount(""); setDescription("");

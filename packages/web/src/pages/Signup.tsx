@@ -24,7 +24,6 @@ export default function Signup() {
       localStorage.setItem("firstName", res.data.user?.firstName ?? "");
       navigate("/dashboard");
     } catch (err: any) {
-      // provide a helpful error message
       const message = err?.response?.data?.error || err?.message || 'Signup failed';
       alert(message);
     } finally {

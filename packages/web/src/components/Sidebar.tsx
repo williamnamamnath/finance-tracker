@@ -18,7 +18,8 @@ export default function Sidebar() {
     navigate("/");
   }
 
-  if (!isLoggedIn || HIDDEN_PATHS.includes(location.pathname)) return null;
+  if (!isLoggedIn || HIDDEN_PATHS.includes(location.pathname)) 
+    return null;
 
   return (
     <aside className="w-48 min-h-screen bg-white border-r border-gray-200 flex flex-col pt-6 shrink-0">

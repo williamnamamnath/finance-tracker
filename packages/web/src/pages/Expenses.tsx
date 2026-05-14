@@ -15,9 +15,9 @@ export default function Expenses() {
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    if (!token) return;
-    api
-      .get("/api/transactions", { headers: { Authorization: `Bearer ${token}` } })
+    if (!token) 
+      return;
+    api.get("/api/transactions", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setTransactions(r.data.transactions.filter((t: any) => t.type === "EXPENSE")));
   }, []);
 
@@ -25,6 +25,7 @@ export default function Expenses() {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     return d;
+    
   });
   const labels = days.map((d) => d.toLocaleDateString());
   const chartData = labels.map(() => 0);

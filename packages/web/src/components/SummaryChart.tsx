@@ -1,4 +1,3 @@
-import React from "react";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
@@ -18,6 +17,8 @@ export default function SummaryChart({ labels, income, expense }: Props) {
       { label: 'Expense', data: expense, borderColor: 'rgba(239,68,68,1)', backgroundColor: 'rgba(239,68,68,0.2)' }
     ]
   };
+
   const options = { responsive: true, plugins: { legend: { position: 'top' as const } } };
+  
   return <div className="p-4 bg-white rounded shadow"><Line data={data} options={options} /></div>
 }

@@ -77,7 +77,6 @@ async function readLocalStore(): Promise<LocalStore> {
       await writeLocalStore(initial);
       return initial;
     }
-
     throw error;
   }
 }
@@ -310,7 +309,6 @@ app.post("/api/auth/login", async (req, res) => {
   res.json({ token, user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email } });
 });
 
-// simple middleware
 function auth(req: any, res: any, next: any) {
   const header = req.headers.authorization;
   if (!header) return res.status(401).json({ error: "missing token" });
