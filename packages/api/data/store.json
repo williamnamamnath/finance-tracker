@@ -1,0 +1,46 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "first_name": "William",
+      "last_name": "Nam-Amnath",
+      "email": "willnam30@gmail.com",
+      "password": "$2b$10$qtApJ8LP8gfoxhexaG175eXL.NQCXGRvpLWaPU13aZtX76/u4HpRW",
+      "country": "Canada",
+      "created_at": "2026-05-11T16:40:31.414Z"
+    },
+    {
+      "id": 2,
+      "first_name": "Will",
+      "last_name": "N",
+      "email": "william.nam-amnath@mail.mcgill.ca",
+      "password": "$2b$10$HZ1abo/Eqh15TrzwkteYe.e0wH.Gx9kM2hd1GIAk8EL0/DJH.hph6",
+      "country": "Canada",
+      "created_at": "2026-05-11T16:45:45.513Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "name": "test",
+      "category": "Grocery",
+      "amount": 80,
+      "date": "2026-05-11T16:41:37.529Z",
+      "type": "EXPENSE",
+      "created_at": "2026-05-11T16:41:37.535Z"
+    },
+    {
+      "id": 2,
+      "user_id": 1,
+      "name": "income test",
+      "category": "Investment",
+      "amount": 1200,
+      "date": "2026-05-11T16:42:29.312Z",
+      "type": "INCOME",
+      "created_at": "2026-05-11T16:42:29.320Z"
+    }
+  ],
+  "nextUserId": 3,
+  "nextTransactionId": 3
+}
