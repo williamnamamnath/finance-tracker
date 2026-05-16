@@ -1,6 +1,9 @@
 FinanceTracker
 ===========================
 
+<img width="943" height="471" alt="landing-page" src="https://github.com/user-attachments/assets/78ff2e95-aa41-4571-a043-0128c4913fc6" />
+
+
 This is a repository for a budget app that allows users to enter their income and expenses in order to budget more efficiently.
 
 Structure
