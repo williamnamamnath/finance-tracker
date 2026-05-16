@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api.ts";
 
 export default function Login() {
@@ -24,13 +24,49 @@ export default function Login() {
   }
 
   return (
-    <div className="container mx-auto p-8 max-w-md">
-      <h2 className="text-2xl font-bold mb-4">Login</h2>
-      <form onSubmit={submit} className="space-y-4">
-        <input className="w-full border p-2" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <input type="password" className="w-full border p-2" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-        <button className="px-4 py-2 bg-blue-500 text-white rounded">Login</button>
-      </form>
+    <div className="min-h-screen bg-[#F7F7F8] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-8">
+        <div className="mb-10 text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Login</h1>
+          <p className="text-sm text-[#6E6E6E] mt-1">Sign in to your account to continue planning.</p>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              className="w-full h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent"
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-3 bg-[#0A84FF] text-white font-semibold rounded-lg text-sm hover:bg-blue-600 transition-colors mt-2"
+          >
+            Sign in
+          </button>
+        </form>
+        <p className="mt-6 text-center text-sm text-[#6E6E6E]">
+          Don't have an account?{" "}
+          <Link to="/signup" className="text-[#0A84FF] font-semibold hover:underline">
+            Sign up
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Income from "./pages/Income";
 import Expenses from "./pages/Expenses";
 import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
 import Sidebar from "./components/Sidebar";
 import "./styles.css";
 
@@ -27,6 +28,7 @@ function App() {
           </Routes>
         </main>
       </div>
+      <Footer />
     </BrowserRouter>
   );
 }
