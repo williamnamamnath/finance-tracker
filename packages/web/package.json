@@ -18,11 +18,11 @@
   "devDependencies": {
     "@types/react": "^18.2.24",
     "@types/react-dom": "^18.2.8",
+    "@vitejs/plugin-react": "^4.1.0",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.1.6",
-    "vite": "^5.1.0",
-    "@vitejs/plugin-react": "^4.1.0",
-    "postcss": "^8.4.27",
-    "autoprefixer": "^10.4.14"
+    "vite": "^5.1.0"
   }
 }
