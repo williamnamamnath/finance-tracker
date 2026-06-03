@@ -11,8 +11,9 @@ dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseUrl || !supabaseKey) throw new Error("Supabase env vars missing");
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -48,7 +49,7 @@ type LocalStore = {
   nextTransactionId: number;
 };
 
-let storageMode: "supabase" | "local" = "supabase";
+let storageMode: "supabase" | "local" = supabase ? "supabase" : "local";
 
 function defaultStore(): LocalStore {
   return {
@@ -90,7 +91,10 @@ function isMissingSupabaseTable(error: any) {
   return (
     message.includes("schema cache") ||
     message.includes("could not find the table") ||
-    message.includes("relation") && message.includes("does not exist")
+    (message.includes("relation") && message.includes("does not exist")) ||
+    message.includes("fetch failed") ||
+    message.includes("failed to fetch") ||
+    message.includes("econnrefused")
   );
 }
 
@@ -99,12 +103,18 @@ function switchToLocalStorage(error: any) {
   if (!isMissingSupabaseTable(error)) return;
 
   storageMode = "local";
-  console.warn("Supabase schema is missing required tables; using local file storage instead.");
+  console.warn("Supabase unavailable; using local file storage instead.");
 }
 
 async function detectStorageMode() {
-  const { error } = await supabase.from("users").select("id").limit(1);
-  switchToLocalStorage(error);
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("users").select("id").limit(1);
+    switchToLocalStorage(error);
+  } catch {
+    storageMode = "local";
+    console.warn("Supabase unreachable at startup; using local file storage instead.");
+  }
 }
 
 async function createUser(input: {
@@ -115,7 +125,7 @@ async function createUser(input: {
   country?: string;
 }): Promise<UserRecord> {
   if (storageMode === "supabase") {
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from("users")
       .insert([
         {
@@ -156,7 +166,7 @@ async function createUser(input: {
 
 async function findUserByEmail(email: string): Promise<UserRecord | null> {
   if (storageMode === "supabase") {
-    const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+    const { data, error } = await supabase!.from("users").select("*").eq("email", email).maybeSingle();
     if (!error) return (data as UserRecord | null) ?? null;
     switchToLocalStorage(error);
     if (storageMode === "supabase") throw error;
@@ -168,7 +178,7 @@ async function findUserByEmail(email: string): Promise<UserRecord | null> {
 
 async function findUserById(id: number): Promise<UserRecord | null> {
   if (storageMode === "supabase") {
-    const { data, error } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await supabase!.from("users").select("*").eq("id", id).maybeSingle();
     if (!error) return (data as UserRecord | null) ?? null;
     switchToLocalStorage(error);
     if (storageMode === "supabase") throw error;
@@ -187,7 +197,7 @@ async function createTransaction(input: {
   type: string;
 }): Promise<TransactionRecord> {
   if (storageMode === "supabase") {
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from("transactions")
       .insert([
         {
@@ -227,7 +237,7 @@ async function createTransaction(input: {
 
 async function listTransactions(userId: number): Promise<TransactionRecord[]> {
   if (storageMode === "supabase") {
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from("transactions")
       .select("*")
       .eq("user_id", userId)
@@ -244,13 +254,72 @@ async function listTransactions(userId: number): Promise<TransactionRecord[]> {
     .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
 }
 
+async function updateTransaction(id: number, userId: number, input: {
+  name?: string;
+  category?: string;
+  amount?: number;
+  date?: string;
+}): Promise<TransactionRecord> {
+  if (storageMode === "supabase") {
+    const updates: Record<string, any> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.category !== undefined) updates.category = input.category;
+    if (input.amount !== undefined) updates.amount = input.amount;
+    if (input.date !== undefined) updates.date = input.date;
+
+    const { data, error } = await supabase!
+      .from("transactions")
+      .update(updates)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select()
+      .single();
+
+    if (!error) return data as TransactionRecord;
+    switchToLocalStorage(error);
+    if (storageMode === "supabase") throw error;
+  }
+
+  const store = await readLocalStore();
+  const idx = store.transactions.findIndex(t => t.id === id && t.user_id === userId);
+  if (idx === -1) throw new Error("Transaction not found");
+
+  if (input.name !== undefined) store.transactions[idx].name = input.name;
+  if (input.category !== undefined) store.transactions[idx].category = input.category;
+  if (input.amount !== undefined) store.transactions[idx].amount = input.amount;
+  if (input.date !== undefined) store.transactions[idx].date = input.date;
+
+  await writeLocalStore(store);
+  return store.transactions[idx];
+}
+
+async function deleteTransaction(id: number, userId: number): Promise<void> {
+  if (storageMode === "supabase") {
+    const { error } = await supabase!
+      .from("transactions")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (!error) return;
+    switchToLocalStorage(error);
+    if (storageMode === "supabase") throw error;
+  }
+
+  const store = await readLocalStore();
+  const idx = store.transactions.findIndex(t => t.id === id && t.user_id === userId);
+  if (idx === -1) throw new Error("Transaction not found");
+  store.transactions.splice(idx, 1);
+  await writeLocalStore(store);
+}
+
 async function getSummary(userId: number) {
   if (storageMode === "supabase") {
-    const { data: incomesData, error: incomeError } = await supabase.rpc("sum_transactions_by_type", {
+    const { data: incomesData, error: incomeError } = await supabase!.rpc("sum_transactions_by_type", {
       p_user_id: userId,
       p_type: "INCOME",
     });
-    const { data: expensesData, error: expenseError } = await supabase.rpc("sum_transactions_by_type", {
+    const { data: expensesData, error: expenseError } = await supabase!.rpc("sum_transactions_by_type", {
       p_user_id: userId,
       p_type: "EXPENSE",
     });
@@ -284,8 +353,8 @@ function sign(user: { id: number; email: string }) {
 app.post("/api/auth/register", async (req, res) => {
   const { firstName, lastName, email, password, country } = req.body;
   if (!email || !password) return res.status(400).json({ error: "email+password required" });
-  const hashed = await bcrypt.hash(password, 10);
   try {
+    const hashed = await bcrypt.hash(password, 10);
     const user = await createUser({ firstName, lastName, email, password: hashed, country });
     const token = sign({ id: user.id, email: user.email });
     res.json({ token, user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email } });
@@ -296,17 +365,16 @@ app.post("/api/auth/register", async (req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  let user: UserRecord | null;
   try {
-    user = await findUserByEmail(email);
+    const user = await findUserByEmail(email);
+    if (!user) return res.status(401).json({ error: "invalid credentials" });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: "invalid credentials" });
+    const token = sign({ id: user.id, email: user.email });
+    res.json({ token, user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email } });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
-  if (!user) return res.status(401).json({ error: "invalid credentials" });
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(401).json({ error: "invalid credentials" });
-  const token = sign({ id: user.id, email: user.email });
-  res.json({ token, user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email } });
 });
 
 function auth(req: any, res: any, next: any) {
@@ -353,6 +421,34 @@ app.get("/api/transactions", auth, async (req: any, res) => {
   try {
     const transactions = await listTransactions(req.user.id);
     res.json({ transactions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/transactions/:id", auth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "invalid id" });
+  const { name, category, amount, date } = req.body;
+  try {
+    const transaction = await updateTransaction(id, req.user.id, {
+      ...(name !== undefined && { name }),
+      ...(category !== undefined && { category }),
+      ...(amount !== undefined && { amount: Number(amount) }),
+      ...(date !== undefined && { date: new Date(date).toISOString() }),
+    });
+    res.json({ transaction });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/transactions/:id", auth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "invalid id" });
+  try {
+    await deleteTransaction(id, req.user.id);
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
