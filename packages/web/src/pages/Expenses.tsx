@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import TransactionChart from "../components/TransactionChart";
 import { api } from "../api.ts";
+import { type Frequency, FREQUENCY_LABELS, generateOccurrences, toISODateString } from "../frequency.ts";
 
 const EXPENSE_CATEGORIES = ["Groceries", "Rent/Mortgage", "Entertainment", "Utilities", "Insurance", "Healthcare", "Other"];
 
@@ -11,6 +12,8 @@ export default function Expenses() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Groceries");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [frequency, setFrequency] = useState<Frequency>("none");
+  const [customDate, setCustomDate] = useState(toISODateString(new Date()));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState({ name: "", category: "Groceries", amount: "" });
 
@@ -43,15 +46,20 @@ export default function Expenses() {
     if (isSubmitting || !token) return;
     setIsSubmitting(true);
     try {
-      const res = await api.post(
-        "/api/transactions",
-        { name, category, amount: Number(amount), type: "EXPENSE", description },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setTransactions((prev) => [res.data.transaction, ...prev]);
-      setName("");
-      setAmount("");
-      setDescription("");
+      const startKey = frequency === "custom" ? customDate : toISODateString(new Date());
+      const occurrences = generateOccurrences(startKey, frequency);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const results: any[] = [];
+      for (const dateKey of occurrences) {
+        const res = await api.post(
+          "/api/transactions",
+          { name, category, amount: Number(amount), type: "EXPENSE", description, date: new Date(dateKey + "T12:00:00").toISOString() },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (new Date(res.data.transaction.date) <= new Date()) results.push(res.data.transaction);
+      }
+      setTransactions((prev) => [...results, ...prev]);
+      setName(""); setAmount(""); setDescription(""); setFrequency("none");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,12 +139,26 @@ export default function Expenses() {
                 required
               />
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <select value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)} className={inputCls}>
+                {(Object.keys(FREQUENCY_LABELS) as Frequency[]).map(f => (
+                  <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
+                ))}
+              </select>
+              {frequency === "custom" && (
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  className={inputCls}
+                  required
+                />
+              )}
               <input
                 placeholder="Description (optional)"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className={`${inputCls} flex-1`}
+                className={`${inputCls} ${frequency === "custom" ? "col-span-2 sm:col-span-1" : "col-span-2 sm:col-span-3"}`}
               />
               <button
                 type="submit"

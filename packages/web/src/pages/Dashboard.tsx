@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import SummaryChart from "../components/SummaryChart";
 import { api } from "../api.ts";
+import { type Frequency, FREQUENCY_LABELS, generateOccurrences, toISODateString } from "../frequency.ts";
 
 export default function Dashboard() {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
@@ -10,6 +11,8 @@ export default function Dashboard() {
   const [description, setDescription] = useState("");
   const [type, setType] = useState("EXPENSE");
   const [category, setCategory] = useState("Other");
+  const [frequency, setFrequency] = useState<Frequency>("none");
+  const [customDate, setCustomDate] = useState(toISODateString(new Date()));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState({ name: "", category: "Other", amount: "", type: "EXPENSE" });
 
@@ -74,11 +77,18 @@ export default function Dashboard() {
   async function quickAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!token) return;
-    const res = await api.post("/api/transactions", { name, category, amount: Number(amount), type, description }, { headers: { Authorization: `Bearer ${token}` } });
-    setTransactions(prev => [res.data.transaction, ...prev]);
+    const startKey = frequency === "custom" ? customDate : toISODateString(new Date());
+    const occurrences = generateOccurrences(startKey, frequency);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const results: any[] = [];
+    for (const dateKey of occurrences) {
+      const res = await api.post("/api/transactions", { name, category, amount: Number(amount), type, description, date: new Date(dateKey + "T12:00:00").toISOString() }, { headers: { Authorization: `Bearer ${token}` } });
+      if (new Date(res.data.transaction.date) <= new Date()) results.push(res.data.transaction);
+    }
+    setTransactions(prev => [...results, ...prev]);
     const s = await api.get("/api/summary", { headers: { Authorization: `Bearer ${token}` } });
-      setSummary({ ...s.data, balance: s.data.totalIncome - s.data.totalExpense });
-    setName(""); setAmount(""); setDescription("");
+    setSummary({ ...s.data, balance: s.data.totalIncome - s.data.totalExpense });
+    setName(""); setAmount(""); setDescription(""); setFrequency("none");
   }
 
   const inputCls = "h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white";
@@ -150,12 +160,26 @@ export default function Dashboard() {
                 required
               />
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <select value={frequency} onChange={e => setFrequency(e.target.value as Frequency)} className={inputCls}>
+                {(Object.keys(FREQUENCY_LABELS) as Frequency[]).map(f => (
+                  <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
+                ))}
+              </select>
+              {frequency === "custom" && (
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={e => setCustomDate(e.target.value)}
+                  className={inputCls}
+                  required
+                />
+              )}
               <input
                 placeholder="Description (optional)"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className={`${inputCls} flex-1`}
+                className={`${inputCls} ${frequency === "custom" ? "col-span-2 sm:col-span-1" : "col-span-2 sm:col-span-3"}`}
               />
               <button
                 type="submit"

@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Income from "./pages/Income";
 import Expenses from "./pages/Expenses";
 import Calendar from "./pages/Calendar";
+import Upcoming from "./pages/Upcoming";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import Sidebar from "./components/Sidebar";
@@ -27,6 +28,7 @@ function App() {
             <Route path="/income" element={<Income />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/calendar" element={<Calendar />} />
+            <Route path="/upcoming" element={<Upcoming />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
