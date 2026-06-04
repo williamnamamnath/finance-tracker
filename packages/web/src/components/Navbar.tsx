@@ -1,9 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+const HIDDEN_PATHS = ["/", "/login", "/signup"];
+
+const NAV_LINKS = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/income", label: "Income" },
+  { to: "/expenses", label: "Expenses" },
+  { to: "/calendar", label: "Calendar" },
+  { to: "/upcoming", label: "Upcoming" },
+  { to: "/past-transactions", label: "Past Transactions" },
+];
+
 export default function Navbar() {
   const [firstName, setFirstName] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -12,6 +24,10 @@ export default function Navbar() {
     const token = localStorage.getItem("token");
     const name = localStorage.getItem("firstName");
     setFirstName(token ? name : null);
+  }, [location]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
   }, [location]);
 
   useEffect(() => {
@@ -33,10 +49,31 @@ export default function Navbar() {
     alert("Logged out successfully!");
   }
 
+  const showNav = firstName !== null && !HIDDEN_PATHS.includes(location.pathname);
+
   return (
-    <nav className="p-4 bg-white shadow-sm">
-      <div className="container mx-auto flex justify-between">
-        <Link to={firstName !== null ? "/dashboard" : "/"} className="font-bold text-3xl">FinanceTracker</Link>
+    <nav className="relative bg-white shadow-sm">
+      <div className="container mx-auto flex justify-between items-center px-4 py-4">
+        <div className="flex items-center gap-3">
+          {showNav && (
+            <button
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className="md:hidden p-1 rounded-md text-gray-600 hover:bg-gray-100"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          )}
+          <Link to={firstName !== null ? "/dashboard" : "/"} className="font-bold text-3xl">FinanceTracker</Link>
+        </div>
         <div className="space-x-4 flex items-center">
           {firstName !== null ? (
             <>
@@ -70,6 +107,28 @@ export default function Navbar() {
           )}
         </div>
       </div>
+
+      {showNav && mobileMenuOpen && (
+        <div className="md:hidden border-t border-gray-100 bg-white shadow-md">
+          <nav className="flex flex-col px-4 py-2">
+            {NAV_LINKS.map(({ to, label }) => (
+              <Link
+                key={to}
+                to={to}
+                className="px-3 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
+              >
+                {label}
+              </Link>
+            ))}
+            <button
+              onClick={() => { handleLogout(); }}
+              className="text-left px-3 py-3 text-sm font-medium text-red-600 hover:bg-gray-100 rounded-md"
+            >
+              Log out
+            </button>
+          </nav>
+        </div>
+      )}
     </nav>
   );
 }

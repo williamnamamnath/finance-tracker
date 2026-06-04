@@ -22,7 +22,7 @@ export default function Sidebar() {
     return null;
 
   return (
-    <aside className="w-48 min-h-screen bg-white border-r border-gray-200 flex flex-col pt-6 shrink-0">
+    <aside className="hidden md:flex md:flex-col w-48 min-h-screen bg-white border-r border-gray-200 pt-6 shrink-0">
       <nav className="flex flex-col gap-1 px-3">
         <Link
           to="/dashboard"

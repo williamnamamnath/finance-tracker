@@ -18,7 +18,15 @@ export default function SummaryChart({ labels, income, expense }: Props) {
     ]
   };
 
-  const options = { responsive: true, plugins: { legend: { position: 'top' as const } } };
-  
-  return <div className="p-4 bg-white rounded shadow"><Line data={data} options={options} /></div>
+  const options = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: { legend: { position: 'top' as const } },
+  };
+
+  return (
+    <div className="w-full max-h-48 md:max-h-none">
+      <Line data={data} options={options} />
+    </div>
+  );
 }
