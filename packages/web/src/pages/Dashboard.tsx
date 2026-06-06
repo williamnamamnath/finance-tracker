@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import SummaryChart from "../components/SummaryChart";
+import CategoryDonut from "../components/CategoryDonut";
 import { api } from "../api.ts";
 import { type Frequency, FREQUENCY_LABELS, generateOccurrences, toISODateString } from "../frequency.ts";
 
@@ -23,21 +23,36 @@ export default function Dashboard() {
     api.get("/api/transactions", { headers: { Authorization: `Bearer ${token}` } }).then(r => setTransactions(r.data.transactions));
   }, []);
 
-  const days = Array.from({length:7}).map((_,i)=>{
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d;
+  const [chartTab, setChartTab] = useState<'expenses' | 'income' | 'all'>('expenses');
+
+  // Build sorted list of months present in transactions
+  const monthKeys = Array.from(
+    new Set(transactions.map(t => new Date(t.date).toISOString().slice(0, 7)))
+  ).sort().reverse(); // "YYYY-MM" descending
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
+
+  // Keep selectedMonth valid when transactions load
+  const effectiveMonth = monthKeys.length > 0
+    ? (monthKeys.includes(selectedMonth) ? selectedMonth : monthKeys[0])
+    : selectedMonth;
+
+  const filteredTransactions = transactions.filter(t =>
+    new Date(t.date).toISOString().slice(0, 7) === effectiveMonth
+  );
+
+  type TxEntry = { amount: number; date: string; name: string };
+  const expenseTotals: Record<string, TxEntry[]> = {};
+  const incomeTotals: Record<string, TxEntry[]> = {};
+  const allTotals: Record<string, TxEntry[]> = {};
+  filteredTransactions.forEach(t => {
+    const entry: TxEntry = { amount: Number(t.amount), date: t.date, name: t.name };
+    if (t.type === 'EXPENSE') expenseTotals[t.category] = [...(expenseTotals[t.category] ?? []), entry];
+    else incomeTotals[t.category] = [...(incomeTotals[t.category] ?? []), entry];
+    allTotals[t.category] = [...(allTotals[t.category] ?? []), entry];
   });
-  const labels = days.map(d=>d.toLocaleDateString());
-  const incomeData = labels.map(l=>0);
-  const expenseData = labels.map(l=>0);
-  transactions.forEach(t=>{
-    const idx = labels.findIndex(l=> l === new Date(t.date).toLocaleDateString());
-    if (idx>=0) {
-      if (t.type === 'INCOME') incomeData[idx] += Number(t.amount);
-      else expenseData[idx] += Number(t.amount);
-    }
-  });
+  const activeCategories = chartTab === 'expenses' ? expenseTotals : chartTab === 'income' ? incomeTotals : allTotals;
 
   const token = localStorage.getItem("token");
 
@@ -117,8 +132,42 @@ export default function Dashboard() {
 
         {/* Chart */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-8">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Income vs Expenses — Last 7 Days</h2>
-          <SummaryChart labels={labels} income={incomeData} expense={expenseData} />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Transactions by Category</h2>
+            <div className="flex items-center gap-3">
+              <select
+                value={effectiveMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="h-8 px-2 border border-gray-200 rounded-lg text-xs text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#0A84FF]"
+              >
+                {(monthKeys.length > 0 ? monthKeys : [currentMonthKey]).map(mk => {
+                  const [y, m] = mk.split('-');
+                  const label = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+                  return <option key={mk} value={mk}>{label}</option>;
+                })}
+              </select>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
+                {(['expenses', 'income', 'all'] as const).map((tab, i) => (
+                  <button
+                    key={tab}
+                    onClick={() => setChartTab(tab)}
+                    className={`px-3 py-1.5 transition-colors ${
+                      chartTab === tab
+                        ? 'bg-[#0A84FF] text-white'
+                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                    } ${i > 0 ? 'border-l border-gray-200' : ''}`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {Object.keys(activeCategories).length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-8">No data for this month.</p>
+          ) : (
+            <CategoryDonut categories={activeCategories} />
+          )}
         </div>
 
         {/* Quick Add */}
