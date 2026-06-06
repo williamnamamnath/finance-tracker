@@ -14,6 +14,10 @@ import Footer from "./components/Footer";
 import Sidebar from "./components/Sidebar";
 import "./styles.css";
 
+function HomeOrDashboard() {
+  return localStorage.getItem("token") ? <Navigate to="/dashboard" replace /> : <Home />;
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -22,7 +26,7 @@ function App() {
         <Sidebar />
         <main className="flex-1">
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<HomeOrDashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/dashboard" element={<Dashboard />} />

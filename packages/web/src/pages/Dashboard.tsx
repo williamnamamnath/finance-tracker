@@ -3,6 +3,15 @@ import CategoryDonut from "../components/CategoryDonut";
 import { api } from "../api.ts";
 import { type Frequency, FREQUENCY_LABELS, generateOccurrences, toISODateString } from "../frequency.ts";
 
+function relativeDate(dateStr: string) {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 export default function Dashboard() {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -15,6 +24,10 @@ export default function Dashboard() {
   const [customDate, setCustomDate] = useState(toISODateString(new Date()));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState({ name: "", category: "Other", amount: "", type: "EXPENSE" });
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,31 +74,37 @@ export default function Dashboard() {
     setEditFields({ name: t.name ?? "", category: t.category ?? "Other", amount: String(t.amount), type: t.type });
   }
 
-  async function handleSave(e: React.FormEvent, id: number) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (editingId === null) return;
+    setSaveError("");
+    setSaveSuccess(false);
     try {
       const res = await api.put(
-        `/api/transactions/${id}`,
+        `/api/transactions/${editingId}`,
         { name: editFields.name, category: editFields.category, amount: Number(editFields.amount), type: editFields.type },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setTransactions(prev => prev.map(t => (t.id === id ? res.data.transaction : t)));
-      setEditingId(null);
+      setTransactions(prev => prev.map(t => (t.id === editingId ? res.data.transaction : t)));
+      setSaveSuccess(true);
+      setTimeout(() => { setEditingId(null); setSaveSuccess(false); }, 800);
       const s = await api.get("/api/summary", { headers: { Authorization: `Bearer ${token}` } });
       setSummary({ ...s.data, balance: s.data.totalIncome - s.data.totalExpense });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setSaveError(err?.response?.data?.error || "Failed to save. Please try again.");
     }
   }
 
   async function handleDelete(id: number) {
+    setDeleteError("");
     try {
       await api.delete(`/api/transactions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setTransactions(prev => prev.filter(t => t.id !== id));
+      setConfirmDeleteId(null);
       const s = await api.get("/api/summary", { headers: { Authorization: `Bearer ${token}` } });
       setSummary({ ...s.data, balance: s.data.totalIncome - s.data.totalExpense });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setDeleteError(err?.response?.data?.error || "Failed to delete. Please try again.");
     }
   }
 
@@ -249,58 +268,34 @@ export default function Dashboard() {
             <p className="text-gray-400 text-sm text-center py-10">No transactions recorded yet.</p>
           ) : (
             <ul className="divide-y divide-gray-50">
-              {transactions.map(t => (
+              {[...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(t => (
                 <li key={t.id} className="px-5 py-4">
-                  {editingId === t.id ? (
-                    <form onSubmit={e => handleSave(e, t.id)} className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
-                      <input
-                        value={editFields.name}
-                        onChange={e => setEditFields(f => ({ ...f, name: e.target.value }))}
-                        className={`${inputCls} col-span-2 sm:col-span-1`}
-                        required
-                      />
-                      <select
-                        value={editFields.type}
-                        onChange={e => setEditFields(f => ({ ...f, type: e.target.value }))}
-                        className={inputCls}
-                      >
-                        <option value="INCOME">Income</option>
-                        <option value="EXPENSE">Expense</option>
-                      </select>
-                      <select
-                        value={editFields.category}
-                        onChange={e => setEditFields(f => ({ ...f, category: e.target.value }))}
-                        className={inputCls}
-                      >
-                        {["Groceries","Rent/Mortgage","Insurance","Utilities","Healthcare","Entertainment","Investment","Salary","Gift","Other"].map(c => <option key={c}>{c}</option>)}
-                      </select>
-                      <input
-                        type="number"
-                        value={editFields.amount}
-                        onChange={e => setEditFields(f => ({ ...f, amount: e.target.value }))}
-                        className={inputCls}
-                        required
-                      />
-                      <div className="flex gap-2 col-span-2 sm:col-span-1">
-                        <button type="submit" className="h-10 flex-1 bg-[#0A84FF] hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-colors">Save</button>
-                        <button type="button" onClick={() => setEditingId(null)} className="h-10 flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-lg transition-colors">Cancel</button>
+                  {confirmDeleteId === t.id ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-gray-700">Delete <span className="font-semibold">{t.name}</span>?</p>
+                      {deleteError && <p className="text-xs text-red-500 w-full">{deleteError}</p>}
+                      <div className="flex gap-2 ml-auto">
+                        <button onClick={() => handleDelete(t.id)} className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors">Yes, delete</button>
+                        <button onClick={() => { setConfirmDeleteId(null); setDeleteError(""); }} className="h-8 px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold rounded-lg transition-colors">Cancel</button>
                       </div>
-                    </form>
+                    </div>
                   ) : (
                     <div className="flex justify-between items-center gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-2 h-8 rounded-full flex-shrink-0 ${t.type === "INCOME" ? "bg-emerald-400" : "bg-red-400"}`} />
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${t.type === "INCOME" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                          {t.type === "INCOME" ? "Income" : "Expense"}
+                        </span>
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate">{t.name}</p>
-                          <p className="text-xs text-gray-400">{t.category} · {new Date(t.date).toLocaleDateString()}</p>
+                          <p className="text-xs text-gray-400">{t.category} · <span title={new Date(t.date).toLocaleDateString()}>{relativeDate(t.date)}</span></p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 flex-shrink-0">
-                        <span className={`font-bold text-base ${t.type === "INCOME" ? "text-emerald-500" : "text-red-500"}`}>
+                        <span className={`font-bold text-base tabular-nums ${t.type === "INCOME" ? "text-emerald-500" : "text-red-500"}`}>
                           {t.type === "INCOME" ? "+" : "-"}${Number(t.amount).toFixed(2)}
                         </span>
                         <button onClick={() => handleEdit(t)} className="text-xs font-medium text-[#0A84FF] hover:text-blue-700 transition-colors">Edit</button>
-                        <button onClick={() => handleDelete(t.id)} className="text-xs font-medium text-red-400 hover:text-red-600 transition-colors">Delete</button>
+                        <button onClick={() => { setConfirmDeleteId(t.id); setDeleteError(""); }} className="text-xs font-medium text-red-400 hover:text-red-600 transition-colors">Delete</button>
                       </div>
                     </div>
                   )}
@@ -310,6 +305,44 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editingId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Edit Transaction</h2>
+            <form onSubmit={handleSave} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Name</label>
+                <input value={editFields.name} onChange={e => setEditFields(f => ({ ...f, name: e.target.value }))} className={`${inputCls} w-full`} required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                <select value={editFields.type} onChange={e => setEditFields(f => ({ ...f, type: e.target.value }))} className={`${inputCls} w-full`}>
+                  <option value="INCOME">Income</option>
+                  <option value="EXPENSE">Expense</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                <select value={editFields.category} onChange={e => setEditFields(f => ({ ...f, category: e.target.value }))} className={`${inputCls} w-full`}>
+                  {["Groceries","Rent/Mortgage","Insurance","Utilities","Healthcare","Entertainment","Investment","Salary","Gift","Other"].map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Amount</label>
+                <input type="number" step="0.01" min="0" value={editFields.amount} onChange={e => setEditFields(f => ({ ...f, amount: e.target.value }))} className={`${inputCls} w-full`} required />
+              </div>
+              {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+              {saveSuccess && <p className="text-xs text-emerald-600 font-semibold">Saved!</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="submit" className="h-10 flex-1 bg-[#0A84FF] hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-colors">Save</button>
+                <button type="button" onClick={() => setEditingId(null)} className="h-10 flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-lg transition-colors">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

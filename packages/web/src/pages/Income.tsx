@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import TransactionChart from "../components/TransactionChart";
 import { api } from "../api.ts";
 import { type Frequency, FREQUENCY_LABELS, generateOccurrences, toISODateString } from "../frequency.ts";
 
 const INCOME_CATEGORIES = ["Salary", "Investment", "Gift", "Other"];
+
+function relativeDate(dateStr: string) {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
 
 export default function Income() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -16,6 +25,12 @@ export default function Income() {
   const [customDate, setCustomDate] = useState(toISODateString(new Date()));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFields, setEditFields] = useState({ name: "", category: "Salary", amount: "" });
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("ALL");
 
   const token = localStorage.getItem("token");
 
@@ -70,31 +85,45 @@ export default function Income() {
     setEditFields({ name: t.name ?? "", category: t.category ?? "Salary", amount: String(t.amount) });
   }
 
-  async function handleSave(e: React.FormEvent, id: number) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (editingId === null) return;
+    setSaveError("");
+    setSaveSuccess(false);
     try {
       const res = await api.put(
-        `/api/transactions/${id}`,
+        `/api/transactions/${editingId}`,
         { name: editFields.name, category: editFields.category, amount: Number(editFields.amount) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setTransactions((prev) => prev.map((t) => (t.id === id ? res.data.transaction : t)));
-      setEditingId(null);
-    } catch (err) {
-      console.error(err);
+      setTransactions((prev) => prev.map((t) => (t.id === editingId ? res.data.transaction : t)));
+      setSaveSuccess(true);
+      setTimeout(() => { setEditingId(null); setSaveSuccess(false); }, 800);
+    } catch (err: any) {
+      setSaveError(err?.response?.data?.error || "Failed to save. Please try again.");
     }
   }
 
   async function handleDelete(id: number) {
+    setDeleteError("");
     try {
       await api.delete(`/api/transactions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setTransactions((prev) => prev.filter((t) => t.id !== id));
-    } catch (err) {
-      console.error(err);
+      setConfirmDeleteId(null);
+    } catch (err: any) {
+      setDeleteError(err?.response?.data?.error || "Failed to delete. Please try again.");
     }
   }
 
   const inputCls = "h-10 px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0A84FF] focus:border-transparent bg-white";
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      if (filterCategory !== "ALL" && t.category !== filterCategory) return false;
+      if (searchQuery && !t.name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [transactions, filterCategory, searchQuery]);
 
   return (
     <div className="min-h-screen bg-[#F7F7F8]">
@@ -173,55 +202,54 @@ export default function Income() {
 
         {/* Transaction List */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Recent Income</h2>
+          <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide shrink-0">Recent Income</h2>
+            <div className="flex flex-col sm:flex-row gap-2 sm:ml-auto">
+              <input
+                type="text"
+                placeholder="Search by name…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className={`${inputCls} sm:w-48`}
+              />
+              <select
+                value={filterCategory}
+                onChange={e => setFilterCategory(e.target.value)}
+                className={inputCls}
+              >
+                <option value="ALL">All categories</option>
+                {INCOME_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
-          {transactions.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-10">No income recorded yet.</p>
+          {filteredTransactions.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-10">{transactions.length === 0 ? "No income recorded yet." : "No income matches your search."}</p>
           ) : (
             <ul className="divide-y divide-gray-50">
-              {transactions.map((t) => (
+              {filteredTransactions.map((t) => (
                 <li key={t.id} className="px-5 py-4">
-                  {editingId === t.id ? (
-                    <form onSubmit={(e) => handleSave(e, t.id)} className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
-                      <input
-                        value={editFields.name}
-                        onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))}
-                        className={`${inputCls} col-span-2 sm:col-span-1`}
-                        required
-                      />
-                      <select
-                        value={editFields.category}
-                        onChange={(e) => setEditFields((f) => ({ ...f, category: e.target.value }))}
-                        className={inputCls}
-                      >
-                        {INCOME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                      </select>
-                      <input
-                        type="number"
-                        value={editFields.amount}
-                        onChange={(e) => setEditFields((f) => ({ ...f, amount: e.target.value }))}
-                        className={inputCls}
-                        required
-                      />
-                      <div className="flex gap-2 col-span-2 sm:col-span-1">
-                        <button type="submit" className="h-10 flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-colors">Save</button>
-                        <button type="button" onClick={() => setEditingId(null)} className="h-10 flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-lg transition-colors">Cancel</button>
+                  {confirmDeleteId === t.id ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-gray-700">Delete <span className="font-semibold">{t.name}</span>?</p>
+                      {deleteError && <p className="text-xs text-red-500 w-full">{deleteError}</p>}
+                      <div className="flex gap-2 ml-auto">
+                        <button onClick={() => handleDelete(t.id)} className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors">Yes, delete</button>
+                        <button onClick={() => { setConfirmDeleteId(null); setDeleteError(""); }} className="h-8 px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold rounded-lg transition-colors">Cancel</button>
                       </div>
-                    </form>
+                    </div>
                   ) : (
                     <div className="flex justify-between items-center gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-2 h-8 rounded-full flex-shrink-0 bg-emerald-400" />
+                        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 bg-emerald-100 text-emerald-700">Income</span>
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate">{t.name}</p>
-                          <p className="text-xs text-gray-400">{t.category} · {new Date(t.date).toLocaleDateString()}</p>
+                          <p className="text-xs text-gray-400">{t.category} · <span title={new Date(t.date).toLocaleDateString()}>{relativeDate(t.date)}</span></p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 flex-shrink-0">
-                        <span className="font-bold text-base text-emerald-500">+${Number(t.amount).toFixed(2)}</span>
+                        <span className="font-bold text-base text-emerald-500 tabular-nums">+${Number(t.amount).toFixed(2)}</span>
                         <button onClick={() => handleEdit(t)} className="text-xs font-medium text-[#0A84FF] hover:text-blue-700 transition-colors">Edit</button>
-                        <button onClick={() => handleDelete(t.id)} className="text-xs font-medium text-red-400 hover:text-red-600 transition-colors">Delete</button>
+                        <button onClick={() => { setConfirmDeleteId(t.id); setDeleteError(""); }} className="text-xs font-medium text-red-400 hover:text-red-600 transition-colors">Delete</button>
                       </div>
                     </div>
                   )}
@@ -231,6 +259,37 @@ export default function Income() {
           )}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editingId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Edit Income</h2>
+            <form onSubmit={handleSave} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Name</label>
+                <input value={editFields.name} onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))} className={`${inputCls} w-full`} required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                <select value={editFields.category} onChange={(e) => setEditFields((f) => ({ ...f, category: e.target.value }))} className={`${inputCls} w-full`}>
+                  {INCOME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Amount</label>
+                <input type="number" step="0.01" min="0" value={editFields.amount} onChange={(e) => setEditFields((f) => ({ ...f, amount: e.target.value }))} className={`${inputCls} w-full`} required />
+              </div>
+              {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+              {saveSuccess && <p className="text-xs text-emerald-600 font-semibold">Saved!</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="submit" className="h-10 flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-colors">Save</button>
+                <button type="button" onClick={() => setEditingId(null)} className="h-10 flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-lg transition-colors">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
